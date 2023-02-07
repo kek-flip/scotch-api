@@ -15,6 +15,7 @@ type User struct {
 	Name              string `json:"name"`
 	Age               int    `json:"age"`
 	Gender            string `json:"gender"`
+	City              string `json:"city"`
 	PhoneNumber       string `json:"phone_number"`
 	About             string `json:"about"`
 }
@@ -27,6 +28,7 @@ func (u *User) Validate() error {
 		validation.Field(&u.Name, validation.Required),
 		validation.Field(&u.Age, validation.Required, validation.Min(18), validation.Max(99)),
 		validation.Field(&u.Gender, validation.Required, validation.In("male", "female")),
+		validation.Field(&u.City, validation.Required),
 		validation.Field(&u.PhoneNumber, validation.Required, validation.Match(regexp.MustCompile(`\A(\+7|8)9[0-9]{9}\z`))),
 	)
 }
