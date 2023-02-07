@@ -4,6 +4,7 @@ import (
 	"regexp"
 
 	validation "github.com/go-ozzo/ozzo-validation"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
@@ -28,4 +29,19 @@ func (u *User) Validate() error {
 		validation.Field(&u.Gender, validation.Required, validation.In("male", "female")),
 		validation.Field(&u.PhoneNumber, validation.Required, validation.Match(regexp.MustCompile(`\A(\+7|8)9[0-9]{9}\z`))),
 	)
+}
+
+func (u *User) ClearPassword() {
+	u.Password = ""
+}
+
+func (u *User) EncryptPassword() error {
+	ep, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.MinCost)
+	if err != nil {
+		return err
+	}
+
+	u.EncryptedPassword = string(ep)
+
+	return nil
 }
