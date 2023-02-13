@@ -26,6 +26,7 @@ func StartServer() error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close(context.Background())
 
 	store := store.NewStore(conn)
 
