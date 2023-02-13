@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kek-flip/scotch-api/internal/model"
 )
@@ -39,8 +40,7 @@ func (r *UserRepository) find(field string, value interface{}) (*model.User, err
 	u := &model.User{}
 	err := r.s.db.QueryRow(
 		context.Background(),
-		"SELECT * FROM users WHERE $1 = $2",
-		field,
+		fmt.Sprintf("SELECT * FROM users WHERE %s = $1", field),
 		value,
 	).Scan(
 		&u.ID,
@@ -72,7 +72,7 @@ func (r *UserRepository) FindByLogin(login string) (*model.User, error) {
 // TODO: write func Update()
 
 func (r *UserRepository) delete(field string, value interface{}) error {
-	_, err := r.s.db.Exec(context.Background(), "DELETE FROM users WHERE $1 = $2", field, value)
+	_, err := r.s.db.Exec(context.Background(), fmt.Sprintf("DELETE FROM users WHERE %s = $1", field), value)
 	return err
 }
 
