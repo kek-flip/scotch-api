@@ -47,3 +47,7 @@ func (u *User) EncryptPassword() error {
 
 	return nil
 }
+
+func (u *User) ComparePassword(password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.EncryptedPassword), []byte(password)) == nil
+}
