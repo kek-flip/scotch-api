@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -20,8 +21,16 @@ type encd_err struct {
 	Error string `json:"error"`
 }
 
+type ctxKey int
+
+const (
+	ctxUserKey ctxKey = iota
+)
+
 var (
 	errWrongLoginOrPassword = errors.New("wrong login or password")
+	errUnauthorized         = errors.New("not authenticated")
+	errNoSuchUser           = errors.New("no user with this id")
 )
 
 type server struct {
@@ -104,6 +113,10 @@ func newErrLogger() *log.Logger {
 func (s *server) configRouter() {
 	s.router.HandleFunc("/users", s.handlerUserCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.heandlerSessionCreate()).Methods("POST")
+
+	userSubrouter := s.router.PathPrefix("/users").Subrouter()
+	userSubrouter.Use(s.authenticateUser)
+	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -111,6 +124,30 @@ func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
 	if data != nil {
 		json.NewEncoder(w).Encode(data)
 	}
+}
+
+func (s *server) authenticateUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.sessionStore.Get(r, "scotch")
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			return
+		}
+
+		id, ok := session.Values["user_id"]
+		if !ok {
+			s.respond(w, http.StatusUnauthorized, encd_err{errUnauthorized.Error()})
+			return
+		}
+
+		u, err := s.store.User().FindById(id.(int))
+		if err != nil {
+			s.respond(w, http.StatusUnauthorized, encd_err{err.Error()})
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxUserKey, u)))
+	})
 }
 
 func (s *server) handlerUserCreate() http.HandlerFunc {
@@ -138,6 +175,33 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 		json.NewEncoder(w).Encode(user)
 
 		s.logger.Printf("Completed %d CREATED\n\n", http.StatusCreated)
+	}
+}
+
+func (s *server) handlerUser() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Started GET \"/users/:id\"")
+		s.logger.Println("Processing by handlerUser()")
+
+		vars := mux.Vars(r)
+
+		id, err := strconv.Atoi(vars["id"])
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Indalid id: ", err)
+			return
+		}
+
+		u, err := s.store.User().FindById(id)
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
+			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			return
+		}
+
+		s.respond(w, http.StatusOK, u)
+
+		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }
 
