@@ -117,6 +117,7 @@ func (s *server) configRouter() {
 	userSubrouter := s.router.PathPrefix("/users").Subrouter()
 	userSubrouter.Use(s.authenticateUser)
 	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
+	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -198,6 +199,19 @@ func (s *server) handlerUser() http.HandlerFunc {
 			s.err_logger.Println("Invalid id: ", errNoSuchUser)
 			return
 		}
+
+		s.respond(w, http.StatusOK, u)
+
+		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
+	}
+}
+
+func (s *server) handlerCurrentUser() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Started GET \"/users/current\"")
+		s.logger.Println("Processing by handlerCurrentUser()")
+
+		u := r.Context().Value(ctxUserKey).(*model.User)
 
 		s.respond(w, http.StatusOK, u)
 
