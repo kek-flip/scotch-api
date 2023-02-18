@@ -118,6 +118,10 @@ func (s *server) configRouter() {
 	userSubrouter.Use(s.authenticateUser)
 	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
+
+	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
+	likeSubrouter.Use(s.authenticateUser)
+	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -189,14 +193,14 @@ func (s *server) handlerUser() http.HandlerFunc {
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Indalid id: ", err)
+			s.err_logger.Printf("Indalid id: %s\n\n", err)
 			return
 		}
 
 		u, err := s.store.User().FindById(id)
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
-			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			s.err_logger.Printf("Invalid id: %s\n\n", errNoSuchUser)
 			return
 		}
 
@@ -260,5 +264,39 @@ func (s *server) heandlerSessionCreate() http.HandlerFunc {
 		}
 
 		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
+	}
+}
+
+func (s *server) handlerLikeCreate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Started POST \"/sessions\"")
+		s.logger.Println("Processing by heandlerSessionCreate()")
+
+		l := &model.Like{}
+		err := json.NewDecoder(r.Body).Decode(l)
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid data format: %s\n\n", err)
+			return
+		}
+
+		session, err := s.sessionStore.Get(r, "scotch")
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n\n", err)
+			return
+		}
+
+		l.UserID = session.Values["user_id"].(int)
+
+		if err = s.store.Like().Create(l); err != nil {
+			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid data: %s\n\n", err)
+			return
+		}
+
+		s.respond(w, http.StatusCreated, l)
+
+		s.logger.Printf("Completed %d CREATED\n\n", http.StatusCreated)
 	}
 }
