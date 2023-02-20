@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -111,6 +112,7 @@ func newErrLogger() *log.Logger {
 }
 
 func (s *server) configRouter() {
+	s.router.Use(s.logRequest)
 	s.router.HandleFunc("/users", s.handlerUserCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handlerSessionCreate()).Methods("POST")
 
@@ -156,9 +158,26 @@ func (s *server) authenticateUser(next http.Handler) http.Handler {
 	})
 }
 
+func (s *server) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Printf("Started %s %s by %s\n", r.Method, r.RequestURI, r.RemoteAddr)
+
+		start := time.Now()
+		rw := &responceWriter{w, http.StatusOK}
+
+		next.ServeHTTP(rw, r)
+
+		s.logger.Printf(
+			"Complited with %d %s in %v\n\n",
+			rw.code,
+			http.StatusText(rw.code),
+			time.Since(start),
+		)
+	})
+}
+
 func (s *server) handlerUserCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started POST \"/users\"")
 		s.logger.Println("Processing by heandlerUserCreate()")
 
 		user := &model.User{}
@@ -179,14 +198,11 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(user)
-
-		s.logger.Printf("Completed %d CREATED\n\n", http.StatusCreated)
 	}
 }
 
 func (s *server) handlerUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started GET \"/users/:id\"")
 		s.logger.Println("Processing by handlerUser()")
 
 		vars := mux.Vars(r)
@@ -206,21 +222,16 @@ func (s *server) handlerUser() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusOK, u)
-
-		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }
 
 func (s *server) handlerCurrentUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started GET \"/users/current\"")
 		s.logger.Println("Processing by handlerCurrentUser()")
 
 		u := r.Context().Value(ctxUserKey).(*model.User)
 
 		s.respond(w, http.StatusOK, u)
-
-		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }
 
@@ -231,7 +242,6 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started POST \"/sessions\"")
 		s.logger.Println("Processing by heandlerSessionCreate()")
 
 		data := &request{}
@@ -263,14 +273,11 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 			s.err_logger.Printf("Session error: %s\n\n", err)
 			return
 		}
-
-		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }
 
 func (s *server) handlerLikeCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started POST \"/sessions\"")
 		s.logger.Println("Processing by heandlerSessionCreate()")
 
 		l := &model.Like{}
@@ -297,14 +304,11 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusCreated, l)
-
-		s.logger.Printf("Completed %d CREATED\n\n", http.StatusCreated)
 	}
 }
 
 func (s *server) handlerLikesLiked() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Started GET \"/likes/liked\"")
 		s.logger.Println("Processing by handlerLikesLiked()")
 
 		session, err := s.sessionStore.Get(r, "scotch")
@@ -337,7 +341,5 @@ func (s *server) handlerLikesLiked() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusOK, users)
-
-		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }
