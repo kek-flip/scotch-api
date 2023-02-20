@@ -112,7 +112,7 @@ func newErrLogger() *log.Logger {
 
 func (s *server) configRouter() {
 	s.router.HandleFunc("/users", s.handlerUserCreate()).Methods("POST")
-	s.router.HandleFunc("/sessions", s.heandlerSessionCreate()).Methods("POST")
+	s.router.HandleFunc("/sessions", s.handlerSessionCreate()).Methods("POST")
 
 	userSubrouter := s.router.PathPrefix("/users").Subrouter()
 	userSubrouter.Use(s.authenticateUser)
@@ -122,6 +122,7 @@ func (s *server) configRouter() {
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
 	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
+	likeSubrouter.HandleFunc("/liked", s.handlerLikesLiked()).Methods("GET")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -223,7 +224,7 @@ func (s *server) handlerCurrentUser() http.HandlerFunc {
 	}
 }
 
-func (s *server) heandlerSessionCreate() http.HandlerFunc {
+func (s *server) handlerSessionCreate() http.HandlerFunc {
 	type request struct {
 		Login    string `json:"login"`
 		Password string `json:"password"`
@@ -298,5 +299,45 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		s.respond(w, http.StatusCreated, l)
 
 		s.logger.Printf("Completed %d CREATED\n\n", http.StatusCreated)
+	}
+}
+
+func (s *server) handlerLikesLiked() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Started GET \"/likes/liked\"")
+		s.logger.Println("Processing by handlerLikesLiked()")
+
+		session, err := s.sessionStore.Get(r, "scotch")
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		likes, err := s.store.Like().FindByUserID(userID)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n\n", err)
+			return
+		}
+
+		users := make([]*model.User, 0)
+		for _, v := range likes {
+			u, err := s.store.User().FindById(v.LikedUser)
+
+			if err != nil {
+				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+				s.err_logger.Printf("Invalid liked user id: %s\n\n", err)
+				return
+			}
+
+			users = append(users, u)
+		}
+
+		s.respond(w, http.StatusOK, users)
+
+		s.logger.Printf("Completed %d OK\n\n", http.StatusOK)
 	}
 }

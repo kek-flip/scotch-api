@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kek-flip/scotch-api/internal/model"
 )
@@ -23,4 +24,40 @@ func (r *LikeRepository) Create(l *model.Like) error {
 	)
 
 	return row.Scan(&l.ID)
+}
+
+func (r *LikeRepository) find(field string, value interface{}) ([]*model.Like, error) {
+	likes := make([]*model.Like, 0)
+
+	rows, err := r.s.db.Query(
+		context.Background(),
+		fmt.Sprintf("SELECT * FROM likes WHERE %s = $1", field),
+		value,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		l := &model.Like{}
+
+		err := rows.Scan(
+			&l.ID,
+			&l.UserID,
+			&l.LikedUser,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		likes = append(likes, l)
+	}
+
+	return likes, nil
+}
+
+func (r *LikeRepository) FindByUserID(userID int) ([]*model.Like, error) {
+	return r.find("user_id", userID)
 }
