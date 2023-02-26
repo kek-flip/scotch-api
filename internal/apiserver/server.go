@@ -58,7 +58,7 @@ func StartServer() error {
 	sessionStore := sessions.NewCookieStore(key)
 
 	server := newServer(store, sessionStore)
-	server.logger.Print("Server is listening on localhost:8080 ...\n\n")
+	server.logger.Print("Server is listening on :8080 ...\n\n")
 	return http.ListenAndServe(":8080", server)
 }
 
