@@ -58,8 +58,8 @@ func StartServer() error {
 	sessionStore := sessions.NewCookieStore(key)
 
 	server := newServer(store, sessionStore)
-	server.logger.Print("Server is listening on :8080 ...\n\n")
-	return http.ListenAndServe(":8080", server)
+	server.logger.Print("Server is listening on :80 ...\n\n")
+	return http.ListenAndServe(":80", server)
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
