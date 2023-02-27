@@ -58,6 +58,11 @@ func (r *LikeRepository) find(field string, value interface{}) ([]*model.Like, e
 	return likes, nil
 }
 
+func (r *LikeRepository) FindById(id int) (*model.Like, error) {
+	likes, err := r.find("like_id", id)
+	return likes[0], err
+}
+
 func (r *LikeRepository) FindByUserID(userID int) ([]*model.Like, error) {
 	return r.find("user_id", userID)
 }
