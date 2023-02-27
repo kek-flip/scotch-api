@@ -25,7 +25,8 @@ type encd_err struct {
 type ctxKey int
 
 const (
-	ctxUserKey ctxKey = iota
+	sessionName        = "scotch"
+	ctxUserKey  ctxKey = iota
 )
 
 var (
@@ -43,7 +44,7 @@ type server struct {
 }
 
 func StartServer() error {
-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:admin@localhost:5432/scotch?sslmode=disable")
+	conn, err := pgx.Connect(context.Background(), "postgres://api:api_password@localhost:5432/scotch?sslmode=disable")
 	if err != nil {
 		return err
 	}
@@ -136,7 +137,7 @@ func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, err := s.sessionStore.Get(r, "scotch")
+		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			return
@@ -184,13 +185,13 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(user); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid data format: %s\n\n", err)
+			s.err_logger.Println("Invalid data format: ", err)
 			return
 		}
 
 		if err := s.store.User().Create(user); err != nil {
 			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid user data: %s\n\n", err)
+			s.err_logger.Println("Invalid user data: ", err)
 			return
 		}
 
@@ -210,14 +211,14 @@ func (s *server) handlerUser() http.HandlerFunc {
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Printf("Indalid id: %s\n\n", err)
+			s.err_logger.Println("Indalid id: ", err)
 			return
 		}
 
 		u, err := s.store.User().FindById(id)
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
-			s.err_logger.Printf("Invalid id: %s\n\n", errNoSuchUser)
+			s.err_logger.Println("Invalid id: ", errNoSuchUser)
 			return
 		}
 
@@ -249,28 +250,28 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(data)
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid data format: %s\n\n", err)
+			s.err_logger.Println("Invalid data format: ", err)
 			return
 		}
 
 		u, err := s.store.User().FindByLogin(data.Login)
 		if err == pgx.ErrNoRows || !u.ComparePassword(data.Password) {
 			s.respond(w, http.StatusUnauthorized, encd_err{errWrongLoginOrPassword.Error()})
-			s.err_logger.Printf("Wrong login or password: %s\n\n", errWrongLoginOrPassword)
+			s.err_logger.Println("Wrong login or password: ", errWrongLoginOrPassword)
 			return
 		}
 
-		session, err := s.sessionStore.Get(r, "scotch")
+		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n\n", err)
+			s.err_logger.Println("Session error: ", err)
 			return
 		}
 
 		session.Values["user_id"] = u.ID
 		if err := s.sessionStore.Save(r, w, session); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n\n", err)
+			s.err_logger.Println("Session error: ", err)
 			return
 		}
 	}
@@ -284,14 +285,14 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		err := json.NewDecoder(r.Body).Decode(l)
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid data format: %s\n\n", err)
+			s.err_logger.Println("Invalid data format: ", err)
 			return
 		}
 
-		session, err := s.sessionStore.Get(r, "scotch")
+		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n\n", err)
+			s.err_logger.Println("Session error: ", err)
 			return
 		}
 
@@ -299,7 +300,7 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 
 		if err = s.store.Like().Create(l); err != nil {
 			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid data: %s\n\n", err)
+			s.err_logger.Println("Invalid data: ", err)
 			return
 		}
 
@@ -311,10 +312,10 @@ func (s *server) handlerLikesLiked() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerLikesLiked()")
 
-		session, err := s.sessionStore.Get(r, "scotch")
+		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n\n", err)
+			s.err_logger.Printf("Session error: %s\n", err)
 			return
 		}
 
@@ -323,7 +324,7 @@ func (s *server) handlerLikesLiked() http.HandlerFunc {
 		likes, err := s.store.Like().FindByUserID(userID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n\n", err)
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
 			return
 		}
 
@@ -333,7 +334,7 @@ func (s *server) handlerLikesLiked() http.HandlerFunc {
 
 			if err != nil {
 				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-				s.err_logger.Printf("Invalid liked user id: %s\n\n", err)
+				s.err_logger.Printf("Invalid liked user id: %s\n", err)
 				return
 			}
 

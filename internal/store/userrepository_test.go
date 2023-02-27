@@ -20,13 +20,13 @@ func testUser(t *testing.T) *model.User {
 		Age:         20,
 		Gender:      "male",
 		City:        "valid_city",
-		PhoneNumber: "+79991234567",
+		PhoneNumber: "+79999999999",
 		About:       "example text",
 	}
 }
 
 func testDb(t *testing.T) *pgx.Conn {
-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:admin@localhost:5432/scotch?sslmode=disable")
+	conn, err := pgx.Connect(context.Background(), "postgres://api:api_password@localhost:5432/scotch?sslmode=disable")
 	if err != nil {
 		t.Fatal(err)
 	}
