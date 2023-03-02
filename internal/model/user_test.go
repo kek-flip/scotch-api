@@ -18,7 +18,7 @@ func testUser(t *testing.T) *model.User {
 		Age:         20,
 		Gender:      "male",
 		City:        "valid_city",
-		PhoneNumber: "+79991234567",
+		PhoneNumber: "+79999999999",
 		About:       "example text",
 	}
 }
