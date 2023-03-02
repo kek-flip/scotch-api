@@ -125,7 +125,7 @@ func (s *server) configRouter() {
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
 	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
-	likeSubrouter.HandleFunc("/liked", s.handlerLikesLiked()).Methods("GET")
+	likeSubrouter.HandleFunc("/liked", s.handlerLikeLiked()).Methods("GET")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -308,7 +308,7 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 	}
 }
 
-func (s *server) handlerLikesLiked() http.HandlerFunc {
+func (s *server) handlerLikeLiked() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerLikesLiked()")
 
