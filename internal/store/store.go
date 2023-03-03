@@ -5,9 +5,10 @@ import (
 )
 
 type Store struct {
-	db             *pgx.Conn
-	userRepository *UserRepository
-	likeRepository *LikeRepository
+	db              *pgx.Conn
+	userRepository  *UserRepository
+	likeRepository  *LikeRepository
+	matchRepository *MatchRepository
 }
 
 func NewStore(db *pgx.Conn) *Store {
@@ -26,4 +27,11 @@ func (s *Store) Like() *LikeRepository {
 		s.likeRepository = &LikeRepository{s}
 	}
 	return s.likeRepository
+}
+
+func (s *Store) Match() *MatchRepository {
+	if s.matchRepository == nil {
+		s.matchRepository = &MatchRepository{s}
+	}
+	return s.matchRepository
 }
