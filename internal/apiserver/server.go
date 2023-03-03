@@ -121,11 +121,11 @@ func (s *server) configRouter() {
 	userSubrouter.Use(s.authenticateUser)
 	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
+	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
 	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
-	likeSubrouter.HandleFunc("/liked", s.handlerLikeLiked()).Methods("GET")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -236,6 +236,43 @@ func (s *server) handlerCurrentUser() http.HandlerFunc {
 	}
 }
 
+func (s *server) handlerLikedUsers() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerLikesLiked()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		likes, err := s.store.Like().FindByUserID(userID)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
+
+		users := make([]*model.User, 0)
+		for _, v := range likes {
+			u, err := s.store.User().FindById(v.LikedUser)
+
+			if err != nil {
+				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+				s.err_logger.Printf("Invalid liked user id: %s\n", err)
+				return
+			}
+
+			users = append(users, u)
+		}
+
+		s.respond(w, http.StatusOK, users)
+	}
+}
+
 func (s *server) handlerSessionCreate() http.HandlerFunc {
 	type request struct {
 		Login    string `json:"login"`
@@ -305,42 +342,5 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusCreated, l)
-	}
-}
-
-func (s *server) handlerLikeLiked() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Processing by handlerLikesLiked()")
-
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
-
-		likes, err := s.store.Like().FindByUserID(userID)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
-			return
-		}
-
-		users := make([]*model.User, 0)
-		for _, v := range likes {
-			u, err := s.store.User().FindById(v.LikedUser)
-
-			if err != nil {
-				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-				s.err_logger.Printf("Invalid liked user id: %s\n", err)
-				return
-			}
-
-			users = append(users, u)
-		}
-
-		s.respond(w, http.StatusOK, users)
 	}
 }
