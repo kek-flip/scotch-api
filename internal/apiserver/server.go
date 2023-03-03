@@ -127,6 +127,7 @@ func (s *server) configRouter() {
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
 	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
+	likeSubrouter.HandleFunc("", s.handlerLikeDelete()).Methods("DELETE")
 }
 
 func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
@@ -380,5 +381,34 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusCreated, l)
+	}
+}
+
+func (s *server) handlerLikeDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerLikeDelete()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		data := make(map[string]int)
+		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data format: ", err)
+			return
+		}
+
+		err = s.store.Like().DeleteByUsers(userID, data["liked_user"])
+		if err != nil {
+			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data: ", err)
+			return
+		}
 	}
 }

@@ -66,3 +66,23 @@ func (r *LikeRepository) FindById(id int) (*model.Like, error) {
 func (r *LikeRepository) FindByUserID(userID int) ([]*model.Like, error) {
 	return r.find("user_id", userID)
 }
+
+func (r *LikeRepository) DeleteById(id int) error {
+	_, err := r.s.db.Exec(
+		context.Background(),
+		"DELETE FROM likes WHERE like_id = $1",
+		id,
+	)
+
+	return err
+}
+
+func (r *LikeRepository) DeleteByUsers(userId, likedUser int) error {
+	_, err := r.s.db.Exec(
+		context.Background(),
+		"DELETE FROM likes WHERE user_id = $1 AND liked_user = $2",
+		userId, likedUser,
+	)
+
+	return err
+}
