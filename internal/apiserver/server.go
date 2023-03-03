@@ -121,6 +121,7 @@ func (s *server) configRouter() {
 	userSubrouter.Use(s.authenticateUser)
 	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
+	userSubrouter.HandleFunc("/current", s.handlerUserUpdate()).Methods("PATCH", "PUT")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
@@ -219,6 +220,43 @@ func (s *server) handlerUser() http.HandlerFunc {
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
 			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			return
+		}
+
+		s.respond(w, http.StatusOK, u)
+	}
+}
+
+func (s *server) handlerUserUpdate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUserUpdate()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		u, err := s.store.User().FindById(userID)
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
+			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			return
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(u); err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data format: ", err)
+			return
+		}
+
+		err = s.store.User().Update(u)
+		if err != nil {
+			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
+			s.err_logger.Println(err)
 			return
 		}
 
