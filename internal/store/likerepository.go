@@ -67,6 +67,20 @@ func (r *LikeRepository) FindByUserID(userID int) ([]*model.Like, error) {
 	return r.find("user_id", userID)
 }
 
+func (r *LikeRepository) FindMatchLike(l *model.Like) (*model.Like, error) {
+	like := &model.Like{}
+
+	row := r.s.db.QueryRow(
+		context.Background(),
+		"SELECT * FROM likes WHERE user_id = $1 AND liked_user = $2",
+		l.LikedUser, l.UserID,
+	)
+
+	err := row.Scan(&like.ID, &like.UserID, &like.LikedUser)
+
+	return like, err
+}
+
 func (r *LikeRepository) DeleteById(id int) error {
 	_, err := r.s.db.Exec(
 		context.Background(),
