@@ -124,6 +124,7 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerUserUpdate()).Methods("PATCH", "PUT")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
+	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
 
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
@@ -340,6 +341,43 @@ func (s *server) handlerLikedUsers() http.HandlerFunc {
 		users := make([]*model.User, 0)
 		for _, v := range likes {
 			u, err := s.store.User().FindById(v.LikedUser)
+
+			if err != nil {
+				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+				s.err_logger.Printf("Invalid liked user id: %s\n", err)
+				return
+			}
+
+			users = append(users, u)
+		}
+
+		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerUserMathces() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUserMathces()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		matches, err := s.store.Match().FindByUser(userID)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
+
+		users := make([]*model.User, 0)
+		for _, v := range matches {
+			u, err := s.store.User().FindById(v.User2)
 
 			if err != nil {
 				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
