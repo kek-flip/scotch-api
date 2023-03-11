@@ -340,7 +340,7 @@ func TestServer_handlerLikeLiked(t *testing.T) {
 	defer conn.Close(context.Background())
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/likes/liked", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/liked", nil)
 
 	s.ServeHTTP(rec, req)
 
