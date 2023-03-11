@@ -27,6 +27,7 @@ type ctxKey int
 const (
 	sessionName        = "scotch"
 	ctxUserKey  ctxKey = iota
+	ctxLikeKey  ctxKey = iota
 )
 
 var (
@@ -126,7 +127,11 @@ func (s *server) configRouter() {
 
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
-	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
+
+	likeSubrouterCreate := likeSubrouter.PathPrefix("").Subrouter()
+	likeSubrouterCreate.Use(s.checkMatch)
+	likeSubrouterCreate.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
+
 	likeSubrouter.HandleFunc("", s.handlerLikeDelete()).Methods("DELETE")
 }
 
@@ -176,6 +181,43 @@ func (s *server) logRequest(next http.Handler) http.Handler {
 			http.StatusText(rw.code),
 			time.Since(start),
 		)
+	})
+}
+
+func (s *server) checkMatch(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		l := &model.Like{}
+
+		err := json.NewDecoder(r.Body).Decode(l)
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data format: ", err)
+			return
+		}
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Session error: ", err)
+			return
+		}
+
+		l.UserID = session.Values["user_id"].(int)
+
+		if _, err := s.store.Like().FindMatchLike(l); err == nil {
+			m := &model.Match{
+				User1: l.UserID,
+				User2: l.LikedUser,
+			}
+
+			if err := s.store.Match().Create(m); err != nil {
+				s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
+				s.err_logger.Println("Invalid data: ", err)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxLikeKey, l)))
 	})
 }
 
@@ -355,26 +397,11 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 
 func (s *server) handlerLikeCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.logger.Println("Processing by heandlerSessionCreate()")
+		s.logger.Println("Processing by heandlerLikeCreate()")
 
-		l := &model.Like{}
-		err := json.NewDecoder(r.Body).Decode(l)
-		if err != nil {
-			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
-			return
-		}
+		l := r.Context().Value(ctxLikeKey).(*model.Like)
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Session error: ", err)
-			return
-		}
-
-		l.UserID = session.Values["user_id"].(int)
-
-		if err = s.store.Like().Create(l); err != nil {
+		if err := s.store.Like().Create(l); err != nil {
 			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
 			s.err_logger.Println("Invalid data: ", err)
 			return
