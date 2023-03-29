@@ -126,6 +126,7 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/current", s.handlerUserDelete()).Methods("DELETE")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
+	userSubrouter.HandleFunc("", s.handlerUsersByFilter()).Methods("GET")
 
 	sessionSubrouter := s.router.PathPrefix("/sessions").Subrouter()
 	sessionSubrouter.Use(s.authenticateUser)
@@ -433,6 +434,44 @@ func (s *server) handlerUserDelete() http.HandlerFunc {
 			s.err_logger.Printf("Invalid current user id: %s\n", err)
 			return
 		}
+	}
+}
+
+func (s *server) handlerUsersByFilter() http.HandlerFunc {
+	type filter struct {
+		MinAge int    `json:"min_age"`
+		MaxAge int    `json:"max_age"`
+		Gender string `json:"gender"`
+		City   string `json:"city"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUsersByFilter()")
+
+		f := &filter{}
+
+		if err := json.NewDecoder(r.Body).Decode(f); err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data format: ", err)
+			return
+		}
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		users, err := s.store.User().FindByFilter(userID, f.MinAge, f.MaxAge, f.Gender, f.City)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data format: ", err)
+			return
+		}
+
+		s.respond(w, http.StatusOK, users)
 	}
 }
 
