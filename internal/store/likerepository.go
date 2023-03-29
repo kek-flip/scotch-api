@@ -81,14 +81,21 @@ func (r *LikeRepository) FindMatchLike(l *model.Like) (*model.Like, error) {
 	return like, err
 }
 
-func (r *LikeRepository) DeleteById(id int) error {
-	_, err := r.s.db.Exec(
-		context.Background(),
-		"DELETE FROM likes WHERE like_id = $1",
-		id,
-	)
-
+func (r *LikeRepository) delete(field string, value interface{}) error {
+	_, err := r.s.db.Exec(context.Background(), fmt.Sprintf("DELETE FROM likes WHERE %s = $1", field), value)
 	return err
+}
+
+func (r *LikeRepository) DeleteById(id int) error {
+	return r.delete("like_id", id)
+}
+
+func (r *LikeRepository) DeleteByUser(userID int) error {
+	return r.delete("user_id", userID)
+}
+
+func (r *LikeRepository) DeleteByLikedUser(likedUser int) error {
+	return r.delete("liked_user", likedUser)
 }
 
 func (r *LikeRepository) DeleteByUsers(userId, likedUser int) error {
