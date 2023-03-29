@@ -77,3 +77,13 @@ func (r *MatchRepository) FindByUser(userId int) ([]*model.Match, error) {
 
 	return append(matchesBy1, matchesBy2...), nil
 }
+
+func (r *MatchRepository) DeleteByUser(id int) error {
+	_, err := r.s.db.Exec(
+		context.Background(),
+		"DELETE FROM matches WHERE user_1 = $1 OR user_2 = $1",
+		id,
+	)
+
+	return err
+}
