@@ -126,6 +126,10 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
 
+	sessionSubrouter := s.router.PathPrefix("/sessions").Subrouter()
+	sessionSubrouter.Use(s.authenticateUser)
+	sessionSubrouter.HandleFunc("", s.handlerSessionDelete()).Methods("DELETE")
+
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
 
@@ -425,6 +429,27 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 		}
 
 		session.Values["user_id"] = u.ID
+		if err := s.sessionStore.Save(r, w, session); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Session error: ", err)
+			return
+		}
+	}
+}
+
+func (s *server) handlerSessionDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerSessionDelete()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		session.Options.MaxAge = -1
+
 		if err := s.sessionStore.Save(r, w, session); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Session error: ", err)
