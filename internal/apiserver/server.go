@@ -123,6 +123,7 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerCurrentUser()).Methods("GET")
 	userSubrouter.HandleFunc("/current", s.handlerUserUpdate()).Methods("PATCH", "PUT")
+	userSubrouter.HandleFunc("/current", s.handlerUserDelete()).Methods("DELETE")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
 
@@ -393,6 +394,45 @@ func (s *server) handlerUserMathces() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerUserDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUserDelete()")
+
+		session, err := s.sessionStore.Get(r, sessionName)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Session error: %s\n", err)
+			return
+		}
+
+		userID := session.Values["user_id"].(int)
+
+		if err := s.store.Like().DeleteByUser(userID); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
+
+		if err := s.store.Like().DeleteByLikedUser(userID); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
+
+		if err := s.store.Match().DeleteByUser(userID); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
+
+		if err := s.store.User().DeleteById(userID); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			return
+		}
 	}
 }
 
