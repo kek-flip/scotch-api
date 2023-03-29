@@ -500,5 +500,12 @@ func (s *server) handlerLikeDelete() http.HandlerFunc {
 			s.err_logger.Println("Invalid data: ", err)
 			return
 		}
+
+		err = s.store.Match().DeleteByUser(userID)
+		if err != nil {
+			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
+			s.err_logger.Println("Invalid data: ", err)
+			return
+		}
 	}
 }
