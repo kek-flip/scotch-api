@@ -32,7 +32,7 @@ const (
 
 var (
 	errWrongLoginOrPassword = errors.New("wrong login or password")
-	errUnauthorized         = errors.New("not authenticated")
+	errUnauthorized         = errors.New("you are not authenticated")
 	errNoSuchUser           = errors.New("no user with this id")
 )
 
@@ -134,11 +134,8 @@ func (s *server) configRouter() {
 
 	likeSubrouter := s.router.PathPrefix("/likes").Subrouter()
 	likeSubrouter.Use(s.authenticateUser)
-
-	likeSubrouterCreate := likeSubrouter.PathPrefix("").Subrouter()
-	likeSubrouterCreate.Use(s.checkMatch)
-	likeSubrouterCreate.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
-
+	likeSubrouter.Use(s.checkMatch)
+	likeSubrouter.HandleFunc("", s.handlerLikeCreate()).Methods("POST")
 	likeSubrouter.HandleFunc("", s.handlerLikeDelete()).Methods("DELETE")
 }
 
@@ -151,24 +148,30 @@ func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Authenticating user...")
+
 		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find session:", err.Error())
 			return
 		}
 
 		id, ok := session.Values["user_id"]
 		if !ok {
 			s.respond(w, http.StatusUnauthorized, encd_err{errUnauthorized.Error()})
+			s.err_logger.Println("Cannot find user_id:", errUnauthorized.Error())
 			return
 		}
 
 		u, err := s.store.User().FindById(id.(int))
 		if err != nil {
-			s.respond(w, http.StatusUnauthorized, encd_err{err.Error()})
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot get user data:", err.Error())
 			return
 		}
 
+		s.logger.Println("Authentication complete")
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxUserKey, u)))
 	})
 }
@@ -195,36 +198,33 @@ func (s *server) checkMatch(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		l := &model.Like{}
 
-		err := json.NewDecoder(r.Body).Decode(l)
-		if err != nil {
+		if err := json.NewDecoder(r.Body).Decode(l); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Invalid like data format:", err.Error())
 			return
 		}
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Session error: ", err)
-			return
-		}
-
-		l.UserID = session.Values["user_id"].(int)
-
-		if _, err := s.store.Like().FindMatchLike(l); err == nil {
-			m := &model.Match{
-				User1: l.UserID,
-				User2: l.LikedUser,
-			}
-
-			if err := s.store.Match().Create(m); err != nil {
-				s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-				s.err_logger.Println("Invalid data: ", err)
-				return
-			}
-		}
-
+		l.UserID = r.Context().Value(ctxUserKey).(*model.User).ID
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxLikeKey, l)))
+
+		if r.Method == http.MethodDelete {
+			return
+		}
+
+		if _, err := s.store.Like().FindMatchLike(l); err != nil {
+			return
+		}
+
+		m := &model.Match{
+			User1: l.UserID,
+			User2: l.LikedUser,
+		}
+
+		if err := s.store.Match().Create(m); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot create match:", err.Error())
+			return
+		}
 	})
 }
 
@@ -232,24 +232,23 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by heandlerUserCreate()")
 
-		user := &model.User{}
+		u := &model.User{}
 
-		if err := json.NewDecoder(r.Body).Decode(user); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(u); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Invalid user data format:", err.Error())
 			return
 		}
 
-		if err := s.store.User().Create(user); err != nil {
-			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Println("Invalid user data: ", err)
+		if err := s.store.User().Create(u); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot create user:", err.Error())
 			return
 		}
 
-		user.ClearPassword()
+		u.ClearPassword()
 
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(user)
+		s.respond(w, http.StatusCreated, u)
 	}
 }
 
@@ -262,14 +261,14 @@ func (s *server) handlerUser() http.HandlerFunc {
 		id, err := strconv.Atoi(vars["id"])
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Indalid id: ", err)
+			s.err_logger.Println("Indalid id:", err.Error())
 			return
 		}
 
 		u, err := s.store.User().FindById(id)
 		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
-			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			s.err_logger.Println("Cannot find user:", errNoSuchUser.Error())
 			return
 		}
 
@@ -281,32 +280,25 @@ func (s *server) handlerUserUpdate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerUserUpdate()")
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
 		u, err := s.store.User().FindById(userID)
 		if err != nil {
-			s.respond(w, http.StatusBadRequest, encd_err{errNoSuchUser.Error()})
-			s.err_logger.Println("Invalid id: ", errNoSuchUser)
+			s.respond(w, http.StatusInternalServerError, encd_err{errNoSuchUser.Error()})
+			s.err_logger.Println("Cannot find user:", errNoSuchUser.Error())
 			return
 		}
 
 		if err := json.NewDecoder(r.Body).Decode(u); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Invalid user data format:", err.Error())
 			return
 		}
 
 		err = s.store.User().Update(u)
 		if err != nil {
-			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Println(err)
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot update user:", err.Error())
 			return
 		}
 
@@ -328,29 +320,21 @@ func (s *server) handlerLikedUsers() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerLikesLiked()")
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
 		likes, err := s.store.Like().FindByUserID(userID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot find like:", err.Error())
 			return
 		}
 
 		users := make([]*model.User, 0)
 		for _, v := range likes {
 			u, err := s.store.User().FindById(v.LikedUser)
-
 			if err != nil {
 				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-				s.err_logger.Printf("Invalid liked user id: %s\n", err)
+				s.err_logger.Println("Cannot find user:", err.Error())
 				return
 			}
 
@@ -365,29 +349,21 @@ func (s *server) handlerUserMathces() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerUserMathces()")
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
 		matches, err := s.store.Match().FindByUser(userID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot find matches:", err.Error())
 			return
 		}
 
 		users := make([]*model.User, 0)
 		for _, v := range matches {
 			u, err := s.store.User().FindById(v.User2)
-
 			if err != nil {
 				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-				s.err_logger.Printf("Invalid liked user id: %s\n", err)
+				s.err_logger.Println("Cannot find user:", err.Error())
 				return
 			}
 
@@ -402,36 +378,29 @@ func (s *server) handlerUserDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerUserDelete()")
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
 		if err := s.store.Like().DeleteByUser(userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot delete like:", err.Error())
 			return
 		}
 
 		if err := s.store.Like().DeleteByLikedUser(userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot delete like:", err.Error())
 			return
 		}
 
 		if err := s.store.Match().DeleteByUser(userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot delete match:", err.Error())
 			return
 		}
 
 		if err := s.store.User().DeleteById(userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Invalid current user id: %s\n", err)
+			s.err_logger.Println("Cannot delete user:", err.Error())
 			return
 		}
 	}
@@ -444,6 +413,7 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 		Gender string `json:"gender"`
 		City   string `json:"city"`
 	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerUsersByFilter()")
 
@@ -451,23 +421,16 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(f); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Invalid filter data format:", err.Error())
 			return
 		}
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
-
-		userID := session.Values["user_id"].(int)
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
 		users, err := s.store.User().FindByFilters(userID, f.MinAge, f.MaxAge, f.Gender, f.City)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Cannot find user:", err.Error())
 			return
 		}
 
@@ -486,31 +449,30 @@ func (s *server) handlerSessionCreate() http.HandlerFunc {
 
 		data := &request{}
 
-		err := json.NewDecoder(r.Body).Decode(data)
-		if err != nil {
+		if err := json.NewDecoder(r.Body).Decode(data); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
+			s.err_logger.Println("Invalid login and password data format:", err.Error())
 			return
 		}
 
 		u, err := s.store.User().FindByLogin(data.Login)
 		if err == pgx.ErrNoRows || !u.ComparePassword(data.Password) {
 			s.respond(w, http.StatusUnauthorized, encd_err{errWrongLoginOrPassword.Error()})
-			s.err_logger.Println("Wrong login or password: ", errWrongLoginOrPassword)
+			s.err_logger.Println("Wrong login or password:", errWrongLoginOrPassword.Error())
 			return
 		}
 
 		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Session error: ", err)
+			s.err_logger.Println("Cannot get session:", err.Error())
 			return
 		}
 
 		session.Values["user_id"] = u.ID
 		if err := s.sessionStore.Save(r, w, session); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Session error: ", err)
+			s.err_logger.Println("Cannot save session:", err.Error())
 			return
 		}
 	}
@@ -523,7 +485,7 @@ func (s *server) handlerSessionDelete() http.HandlerFunc {
 		session, err := s.sessionStore.Get(r, sessionName)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
+			s.err_logger.Println("Cannot get session:", err.Error())
 			return
 		}
 
@@ -531,7 +493,7 @@ func (s *server) handlerSessionDelete() http.HandlerFunc {
 
 		if err := s.sessionStore.Save(r, w, session); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Session error: ", err)
+			s.err_logger.Println("Cannot delete session:", err.Error())
 			return
 		}
 	}
@@ -544,8 +506,8 @@ func (s *server) handlerLikeCreate() http.HandlerFunc {
 		l := r.Context().Value(ctxLikeKey).(*model.Like)
 
 		if err := s.store.Like().Create(l); err != nil {
-			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data: ", err)
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot create like:", err.Error())
 			return
 		}
 
@@ -557,33 +519,17 @@ func (s *server) handlerLikeDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by handlerLikeDelete()")
 
-		session, err := s.sessionStore.Get(r, sessionName)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Printf("Session error: %s\n", err)
-			return
-		}
+		l := r.Context().Value(ctxLikeKey).(*model.Like)
 
-		userID := session.Values["user_id"].(int)
-
-		data := make(map[string]int)
-		if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data format: ", err)
-			return
-		}
-
-		err = s.store.Like().DeleteByUsers(userID, data["liked_user"])
-		if err != nil {
+		if err := s.store.Like().DeleteByUsers(l.UserID, l.LikedUser); err != nil {
 			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data: ", err)
+			s.err_logger.Println("Cannot delete like:", err.Error())
 			return
 		}
 
-		err = s.store.Match().DeleteByUser(userID)
-		if err != nil {
+		if err := s.store.Match().DeleteByUser(l.UserID); err != nil {
 			s.respond(w, http.StatusUnprocessableEntity, encd_err{err.Error()})
-			s.err_logger.Println("Invalid data: ", err)
+			s.err_logger.Println("Cannot delete match:", err.Error())
 			return
 		}
 	}

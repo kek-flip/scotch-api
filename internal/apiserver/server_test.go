@@ -137,7 +137,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: too long login",
@@ -148,7 +148,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: empty login",
@@ -159,7 +159,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: too short password",
@@ -170,7 +170,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: too long paswsword",
@@ -181,7 +181,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: empty password",
@@ -192,7 +192,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: empty name",
@@ -203,7 +203,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: too young user",
@@ -214,7 +214,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: too old user",
@@ -225,7 +225,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: invalid gender",
@@ -236,7 +236,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: empty name",
@@ -247,7 +247,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: invalid phone number",
@@ -258,7 +258,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 		{
 			name: "Invalid user data: empty phone number",
@@ -269,7 +269,7 @@ func TestServer_handlerUserCreate(t *testing.T) {
 				return string(d)
 			},
 			isValid:      false,
-			expectedCode: http.StatusUnprocessableEntity,
+			expectedCode: http.StatusInternalServerError,
 		},
 	}
 
