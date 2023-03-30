@@ -464,7 +464,7 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 
 		userID := session.Values["user_id"].(int)
 
-		users, err := s.store.User().FindByFilter(userID, f.MinAge, f.MaxAge, f.Gender, f.City)
+		users, err := s.store.User().FindByFilters(userID, f.MinAge, f.MaxAge, f.Gender, f.City)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Invalid data format: ", err)

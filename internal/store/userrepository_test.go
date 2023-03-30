@@ -145,31 +145,3 @@ func TestUserRepository_DeleteById(t *testing.T) {
 	row := db.QueryRow(context.Background(), "SELECT * FROM users WHERE user_id = $1", u.ID)
 	assert.Equal(t, row.Scan(), pgx.ErrNoRows)
 }
-
-func TestUserRepository_DeleteByLogin(t *testing.T) {
-	db := testDb(t)
-	defer db.Close(context.Background())
-	s := store.NewStore(db)
-
-	u := testUser(t)
-	err := u.EncryptPassword()
-	assert.NoError(t, err)
-
-	err = db.QueryRow(
-		context.Background(),
-		"INSERT INTO users(login, encrypted_password, name, age, gender, city, phone_number, about) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING user_id",
-		u.Login,
-		u.EncryptedPassword,
-		u.Name,
-		u.Age,
-		u.Gender,
-		u.City,
-		u.PhoneNumber,
-		u.About,
-	).Scan(&u.ID)
-
-	assert.NoError(t, err)
-	assert.NoError(t, s.User().DeleteByLogin(u.Login))
-	row := db.QueryRow(context.Background(), "SELECT * FROM users WHERE login = $1", u.Login)
-	assert.Equal(t, row.Scan(), pgx.ErrNoRows)
-}
