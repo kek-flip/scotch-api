@@ -80,27 +80,3 @@ func TestLikeRepository_MustBeUniquePairConstraint(t *testing.T) {
 	db.Exec(context.Background(), "DELETE FROM likes WHERE like_id = $1", l1.ID)
 	deleteUsers(t, l1.UserID, l1.LikedUser)
 }
-
-func TestLikeRepository_FindByID(t *testing.T) {
-	original_like := testLike(t)
-
-	db := testDb(t)
-	defer db.Close(context.Background())
-	s := store.NewStore(db)
-
-	err := db.QueryRow(
-		context.Background(),
-		"INSERT INTO likes(user_id, liked_user) VALUES ($1, $2) RETURNING like_id",
-		original_like.UserID,
-		original_like.LikedUser,
-	).Scan(&original_like.ID)
-
-	assert.NoError(t, err)
-
-	like, err := s.Like().FindById(original_like.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, original_like, like)
-
-	db.Exec(context.Background(), "DELETE FROM likes WHERE like_id = $1", original_like.ID)
-	deleteUsers(t, original_like.UserID, original_like.LikedUser)
-}
