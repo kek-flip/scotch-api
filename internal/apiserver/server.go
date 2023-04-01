@@ -1,14 +1,19 @@
 package apiserver
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -34,11 +39,15 @@ var (
 	errWrongLoginOrPassword = errors.New("wrong login or password")
 	errUnauthorized         = errors.New("you are not authenticated")
 	errNoSuchUser           = errors.New("no user with this id")
+	errWrongContentType     = errors.New("expected multipart")
+	errEmptyUser            = errors.New("expected user data")
+	errEmptyPhoto           = errors.New("expected photo")
 )
 
 type server struct {
 	router       *mux.Router
 	store        *store.Store
+	photoStore   *store.PhotoStore
 	sessionStore *sessions.CookieStore
 	err_logger   *log.Logger
 	logger       *log.Logger
@@ -51,7 +60,12 @@ func StartServer() error {
 	}
 	defer conn.Close(context.Background())
 
-	store := store.NewStore(conn)
+	st := store.NewStore(conn)
+
+	photoStore, err := store.NewPhotoStore("C://Users/normp/Documents/Programming/Go/Суки мы сделаем свой дайвинчик/scotch api/photos")
+	if err != nil {
+		return err
+	}
 
 	key, err := getMasterKey()
 	if err != nil {
@@ -59,7 +73,7 @@ func StartServer() error {
 	}
 	sessionStore := sessions.NewCookieStore(key)
 
-	server := newServer(store, sessionStore)
+	server := newServer(st, photoStore, sessionStore)
 	server.logger.Print("Server is listening on :80 ...\n\n")
 	return http.ListenAndServe(":80", server)
 }
@@ -89,10 +103,11 @@ func getMasterKey() ([]byte, error) {
 	return key, nil
 }
 
-func newServer(st *store.Store, ss *sessions.CookieStore) *server {
+func newServer(st *store.Store, ps *store.PhotoStore, ss *sessions.CookieStore) *server {
 	s := &server{
 		router:       mux.NewRouter(),
 		store:        st,
+		photoStore:   ps,
 		sessionStore: ss,
 		err_logger:   newErrLogger(),
 		logger:       newLogger(),
@@ -144,6 +159,39 @@ func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
 	if data != nil {
 		json.NewEncoder(w).Encode(data)
 	}
+}
+
+func (s *server) respondWithPhoto(w http.ResponseWriter, u *model.User, p []byte) {
+	um, err := json.Marshal(u)
+	if err != nil {
+		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+		return
+	}
+
+	mpw := multipart.NewWriter(w)
+
+	up, err := mpw.CreatePart(map[string][]string{"Content-type": {"application/json"}})
+	if err != nil {
+		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+		return
+	}
+	io.Copy(up, bytes.NewReader(um))
+
+	pp, err := mpw.CreatePart(map[string][]string{"Content-type": {"image/jpeg"}})
+	if err != nil {
+		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+		return
+	}
+	io.Copy(pp, bytes.NewReader(p))
+
+	err = mpw.Close()
+	if err != nil {
+		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-type", "multipart/related;"+"boundary="+mpw.Boundary())
 }
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
@@ -232,17 +280,70 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Println("Processing by heandlerUserCreate()")
 
-		u := &model.User{}
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-type"))
 
-		if err := json.NewDecoder(r.Body).Decode(u); err != nil {
+		if err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
-			s.err_logger.Println("Invalid user data format:", err.Error())
+			s.err_logger.Println("Cannot get content-type", err.Error())
 			return
 		}
 
+		if !strings.HasPrefix(mediaType, "multipart/") {
+			s.respond(w, http.StatusBadRequest, encd_err{errWrongContentType.Error()})
+			s.err_logger.Println("Wrong content-type:", errWrongContentType.Error())
+			return
+		}
+
+		mr := multipart.NewReader(r.Body, params["boundary"])
+		var up, pp bytes.Buffer
+		upw := bufio.NewWriter(&up)
+		ppw := bufio.NewWriter(&pp)
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+				s.err_logger.Println("Cannot parse request part:", err.Error())
+				return
+			}
+
+			if p.Header.Get("Content-type") == "application/json" {
+				io.Copy(upw, p)
+			}
+			if p.Header.Get("Content-type") == "image/jpeg" {
+				io.Copy(ppw, p)
+			}
+		}
+
+		if up.Len() == 0 {
+			s.respond(w, http.StatusBadRequest, encd_err{errEmptyUser.Error()})
+			s.err_logger.Println("Cannot create user:", errEmptyUser.Error())
+			return
+		}
+
+		if up.Len() == 0 {
+			s.respond(w, http.StatusBadRequest, encd_err{errEmptyPhoto.Error()})
+			s.err_logger.Println("Cannot create user:", errEmptyPhoto.Error())
+			return
+		}
+
+		u := &model.User{}
+		if err := json.NewDecoder(&up).Decode(u); err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Invalid user data:", err.Error())
+			return
+		}
 		if err := s.store.User().Create(u); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot create user:", err.Error())
+			return
+		}
+
+		if err := s.photoStore.Create(pp.Bytes(), strconv.Itoa(u.ID)); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot save image:", err.Error())
 			return
 		}
 
@@ -272,7 +373,14 @@ func (s *server) handlerUser() http.HandlerFunc {
 			return
 		}
 
-		s.respond(w, http.StatusOK, u)
+		p, err := s.photoStore.FindByName(strconv.Itoa(id))
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find user photo:", err.Error())
+			return
+		}
+
+		s.respondWithPhoto(w, u, p)
 	}
 }
 
@@ -312,7 +420,14 @@ func (s *server) handlerCurrentUser() http.HandlerFunc {
 
 		u := r.Context().Value(ctxUserKey).(*model.User)
 
-		s.respond(w, http.StatusOK, u)
+		p, err := s.photoStore.FindByName(strconv.Itoa(u.ID))
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find user photo:", err.Error())
+			return
+		}
+
+		s.respondWithPhoto(w, u, p)
 	}
 }
 
@@ -401,6 +516,12 @@ func (s *server) handlerUserDelete() http.HandlerFunc {
 		if err := s.store.User().DeleteById(userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot delete user:", err.Error())
+			return
+		}
+
+		if err := s.photoStore.DeleteByName(strconv.Itoa(userID)); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot delete user photo:", err.Error())
 			return
 		}
 	}
