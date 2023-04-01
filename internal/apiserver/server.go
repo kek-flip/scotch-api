@@ -352,7 +352,7 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 			return
 		}
 
-		if err := s.photoStore.Create(pp.Bytes(), strconv.Itoa(u.ID)); err != nil {
+		if err := s.photoStore.Create(pp.Bytes(), u.ID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot save image:", err.Error())
 			return
@@ -384,7 +384,7 @@ func (s *server) handlerUser() http.HandlerFunc {
 			return
 		}
 
-		p, err := s.photoStore.FindByName(strconv.Itoa(id))
+		p, err := s.photoStore.FindById(id)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot find user photo:", err.Error())
@@ -431,7 +431,7 @@ func (s *server) handlerCurrentUser() http.HandlerFunc {
 
 		u := r.Context().Value(ctxUserKey).(*model.User)
 
-		p, err := s.photoStore.FindByName(strconv.Itoa(u.ID))
+		p, err := s.photoStore.FindById(u.ID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot find user photo:", err.Error())
@@ -583,7 +583,7 @@ func (s *server) handlerPhoto() http.HandlerFunc {
 			return
 		}
 
-		p, err := s.photoStore.FindByName(strconv.Itoa(id))
+		p, err := s.photoStore.FindById(id)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot find user photo:", err.Error())
@@ -607,7 +607,7 @@ func (s *server) handlerPhotoUpdate() http.HandlerFunc {
 
 		userID := r.Context().Value(ctxUserKey).(*model.User).ID
 
-		if err := s.photoStore.Create(p, strconv.Itoa(userID)); err != nil {
+		if err := s.photoStore.Create(p, userID); err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
 			s.err_logger.Println("Cannot update photo:", err.Error())
 			return

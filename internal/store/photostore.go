@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 )
 
@@ -23,13 +24,17 @@ func NewPhotoStore(path string) (*PhotoStore, error) {
 	return &PhotoStore{path}, nil
 }
 
-func (ps *PhotoStore) Create(photo []byte, fileName string) error {
-	fullFileName := fmt.Sprintf("%s/%s.jpeg", ps.path, fileName)
+func (ps *PhotoStore) Create(photo []byte, id int) error {
+	fullFileName := fmt.Sprintf("%s/%d.jpeg", ps.path, id)
 	pf, err := os.Create(fullFileName)
 	if err != nil {
 		return err
 	}
 	defer pf.Close()
+
+	if http.DetectContentType(photo) != "image/jpeg" {
+		return errors.New("not jpeg image")
+	}
 
 	n, err := pf.Write(photo)
 	if len(photo) != n {
@@ -40,8 +45,8 @@ func (ps *PhotoStore) Create(photo []byte, fileName string) error {
 	return nil
 }
 
-func (ps *PhotoStore) FindByName(fileName string) ([]byte, error) {
-	fullFileName := fmt.Sprintf("%s/%s.jpeg", ps.path, fileName)
+func (ps *PhotoStore) FindById(id int) ([]byte, error) {
+	fullFileName := fmt.Sprintf("%s/%d.jpeg", ps.path, id)
 	pf, err := os.OpenFile(fullFileName, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, err
