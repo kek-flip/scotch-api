@@ -143,6 +143,11 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
 	userSubrouter.HandleFunc("", s.handlerUsersByFilter()).Methods("GET")
 
+	photoSubrouter := s.router.PathPrefix("/photos").Subrouter()
+	photoSubrouter.Use(s.authenticateUser)
+	photoSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerPhoto()).Methods("GET")
+	photoSubrouter.HandleFunc("/current", s.handlerPhotoUpdate()).Methods("PATCH", "PUT")
+
 	sessionSubrouter := s.router.PathPrefix("/sessions").Subrouter()
 	sessionSubrouter.Use(s.authenticateUser)
 	sessionSubrouter.HandleFunc("", s.handlerSessionDelete()).Methods("DELETE")
@@ -159,6 +164,12 @@ func (s *server) respond(w http.ResponseWriter, status int, data interface{}) {
 	if data != nil {
 		json.NewEncoder(w).Encode(data)
 	}
+}
+
+func (s *server) respondPhoto(w http.ResponseWriter, p []byte) {
+	io.Copy(w, bytes.NewReader(p))
+	w.Header().Add("Content-type", "image/jpeg")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) respondWithPhoto(w http.ResponseWriter, u *model.User, p []byte) {
@@ -556,6 +567,51 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerPhoto() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerPhoto()")
+
+		vars := mux.Vars(r)
+
+		id, err := strconv.Atoi(vars["id"])
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Indalid id:", err.Error())
+			return
+		}
+
+		p, err := s.photoStore.FindByName(strconv.Itoa(id))
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find user photo:", err.Error())
+			return
+		}
+
+		s.respondPhoto(w, p)
+	}
+}
+
+func (s *server) handlerPhotoUpdate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerPhotoUpdate()")
+
+		p, err := io.ReadAll(r.Body)
+		if err != nil {
+			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
+			s.err_logger.Println("Cannot read photo:", err.Error())
+			return
+		}
+
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
+
+		if err := s.photoStore.Create(p, strconv.Itoa(userID)); err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot update photo:", err.Error())
+			return
+		}
 	}
 }
 
