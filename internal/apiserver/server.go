@@ -54,7 +54,7 @@ type server struct {
 }
 
 func StartServer() error {
-	conn, err := pgx.Connect(context.Background(), "postgres://api:api_password@localhost:5432/scotch?sslmode=disable")
+	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func StartServer() error {
 
 	st := store.NewStore(conn)
 
-	photoStore, err := store.NewPhotoStore("C://Users/normp/Documents/Programming/Go/Суки мы сделаем свой дайвинчик/scotch api/photos")
+	photoStore, err := store.NewPhotoStore(os.Getenv("PHOTOSTORE_PATH"))
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func getMasterKey() ([]byte, error) {
-	file, err := os.OpenFile("./config/master.key", os.O_RDONLY, 0666)
+	file, err := os.OpenFile(os.Getenv("MASTERKEY_PATH"), os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, err
 	}
