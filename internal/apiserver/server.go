@@ -320,10 +320,10 @@ func (s *server) handlerUserCreate() http.HandlerFunc {
 				return
 			}
 
-			if p.Header.Get("Content-type") == "application/json" {
+			if strings.HasPrefix(p.Header.Get("Content-type"), "application/json") {
 				io.Copy(upw, p)
 			}
-			if p.Header.Get("Content-type") == "image/jpeg" {
+			if strings.HasPrefix(p.Header.Get("Content-type"), "image/jpeg") {
 				io.Copy(ppw, p)
 			}
 		}
