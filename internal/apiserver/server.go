@@ -146,6 +146,7 @@ func (s *server) configRouter() {
 	photoSubrouter := s.router.PathPrefix("/photos").Subrouter()
 	photoSubrouter.Use(s.authenticateUser)
 	photoSubrouter.HandleFunc("/{id:[0-9]+}", s.handlerPhoto()).Methods("GET")
+	photoSubrouter.HandleFunc("/current", s.handlerCurrentUserPhoto()).Methods("GET")
 	photoSubrouter.HandleFunc("/current", s.handlerPhotoUpdate()).Methods("PATCH", "PUT")
 
 	sessionSubrouter := s.router.PathPrefix("/sessions").Subrouter()
@@ -170,39 +171,6 @@ func (s *server) respondPhoto(w http.ResponseWriter, p []byte) {
 	io.Copy(w, bytes.NewReader(p))
 	w.Header().Add("Content-type", "image/jpeg")
 	w.WriteHeader(http.StatusOK)
-}
-
-func (s *server) respondWithPhoto(w http.ResponseWriter, u *model.User, p []byte) {
-	um, err := json.Marshal(u)
-	if err != nil {
-		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-		return
-	}
-
-	mpw := multipart.NewWriter(w)
-
-	up, err := mpw.CreatePart(map[string][]string{"Content-type": {"application/json"}})
-	if err != nil {
-		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-		return
-	}
-	io.Copy(up, bytes.NewReader(um))
-
-	pp, err := mpw.CreatePart(map[string][]string{"Content-type": {"image/jpeg"}})
-	if err != nil {
-		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-		return
-	}
-	io.Copy(pp, bytes.NewReader(p))
-
-	err = mpw.Close()
-	if err != nil {
-		s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-type", "multipart/related;"+"boundary="+mpw.Boundary())
 }
 
 func (s *server) authenticateUser(next http.Handler) http.Handler {
@@ -384,14 +352,7 @@ func (s *server) handlerUser() http.HandlerFunc {
 			return
 		}
 
-		p, err := s.photoStore.FindById(id)
-		if err != nil {
-			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Cannot find user photo:", err.Error())
-			return
-		}
-
-		s.respondWithPhoto(w, u, p)
+		s.respond(w, http.StatusOK, u)
 	}
 }
 
@@ -431,14 +392,23 @@ func (s *server) handlerCurrentUser() http.HandlerFunc {
 
 		u := r.Context().Value(ctxUserKey).(*model.User)
 
-		p, err := s.photoStore.FindById(u.ID)
+		s.respond(w, http.StatusOK, u)
+	}
+}
+
+func (s *server) handlerCurrentUserPhoto() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerCurrentUserPhoto()")
+
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
+		photo, err := s.photoStore.FindById(userID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Cannot find user photo:", err.Error())
+			s.err_logger.Println("Cannot find current user photo:", err.Error())
 			return
 		}
 
-		s.respondWithPhoto(w, u, p)
+		s.respondPhoto(w, photo)
 	}
 }
 
