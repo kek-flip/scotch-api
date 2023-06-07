@@ -132,6 +132,7 @@ func (s *server) configRouter() {
 	s.router.Use(s.logRequest)
 	s.router.HandleFunc("/users", s.handlerUserCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handlerSessionCreate()).Methods("POST")
+	s.router.HandleFunc("/users/count", s.handlerUserCount()).Methods("GET")
 
 	userSubrouter := s.router.PathPrefix("/users").Subrouter()
 	userSubrouter.Use(s.authenticateUser)
