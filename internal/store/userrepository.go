@@ -68,6 +68,19 @@ func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender
 	return users, nil
 }
 
+func (r *UserRepository) Count() (int, error) {
+	var usersCount int
+	err := r.s.db.QueryRow(
+		context.Background(),
+		"SELECT count(*) FROM users",
+	).Scan(&usersCount)
+	if err != nil {
+		return -1, err
+	}
+
+	return usersCount, nil
+}
+
 func (r *UserRepository) find(field string, value interface{}) ([]*model.User, error) {
 	users := make([]*model.User, 0)
 

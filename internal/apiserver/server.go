@@ -132,6 +132,7 @@ func (s *server) configRouter() {
 	s.router.Use(s.logRequest)
 	s.router.HandleFunc("/users", s.handlerUserCreate()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handlerSessionCreate()).Methods("POST")
+	s.router.HandleFunc("/users/count", s.handlerUserCount()).Methods("GET")
 
 	userSubrouter := s.router.PathPrefix("/users").Subrouter()
 	userSubrouter.Use(s.authenticateUser)
@@ -467,6 +468,25 @@ func (s *server) handlerUserMathces() http.HandlerFunc {
 		}
 
 		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerUserCount() http.HandlerFunc {
+	type responce struct {
+		UserCount int `json:"user_count"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUserCount()")
+
+		usersCount, err := s.store.User().Count()
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot count users:", err.Error())
+			return
+		}
+
+		s.respond(w, http.StatusOK, responce{UserCount: usersCount})
 	}
 }
 
