@@ -68,32 +68,16 @@ func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender
 	return users, nil
 }
 
-func (r *UserRepository) Count() (*int, error) {
-<<<<<<< HEAD
-	row := r.s.db.QueryRow(
-=======
-	rows, err := r.s.db.Query(
->>>>>>> 0a34d78b88e762eead0c33c7af9d726982aa307c
+func (r *UserRepository) Count() (int, error) {
+	var usersCount int
+	err := r.s.db.QueryRow(
 		context.Background(),
-		"SELECT COUNT(*) FROM users",
-	)
-
-<<<<<<< HEAD
-	var usersCount *int
-	err := row.Scan(usersCount)
-=======
->>>>>>> 0a34d78b88e762eead0c33c7af9d726982aa307c
+		"SELECT count(*) FROM users",
+	).Scan(&usersCount)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
 
-<<<<<<< HEAD
-=======
-	rows.Next()
-	var usersCount *int
-	rows.Scan(usersCount)
-
->>>>>>> 0a34d78b88e762eead0c33c7af9d726982aa307c
 	return usersCount, nil
 }
 

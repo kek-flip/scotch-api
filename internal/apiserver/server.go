@@ -487,7 +487,7 @@ func (s *server) handlerUserCount() http.HandlerFunc {
 			return
 		}
 
-		s.respond(w, http.StatusOK, responce{UserCount: *usersCount})
+		s.respond(w, http.StatusOK, responce{UserCount: usersCount})
 	}
 }
 
