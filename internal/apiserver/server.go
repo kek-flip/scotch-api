@@ -142,6 +142,7 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/current", s.handlerUserDelete()).Methods("DELETE")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
+	userSubrouter.HandleFunc("/count", s.handlerUserCount()).Methods("GET")
 	userSubrouter.HandleFunc("/filter", s.handlerUsersByFilter()).Methods("GET")
 	userSubrouter.HandleFunc("/all", s.handlerUsersAll()).Methods("GET")
 
