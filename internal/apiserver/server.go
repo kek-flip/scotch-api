@@ -142,7 +142,8 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/current", s.handlerUserDelete()).Methods("DELETE")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
-	userSubrouter.HandleFunc("", s.handlerUsersByFilter()).Methods("GET")
+	userSubrouter.HandleFunc("/filter", s.handlerUsersByFilter()).Methods("GET")
+	userSubrouter.HandleFunc("/all", s.handlerUsersAll()).Methods("GET")
 
 	photoSubrouter := s.router.PathPrefix("/photos").Subrouter()
 	photoSubrouter.Use(s.authenticateUser)
@@ -552,7 +553,24 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 		users, err := s.store.User().FindByFilters(userID, f.MinAge, f.MaxAge, f.Gender, f.City)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Cannot find user:", err.Error())
+			s.err_logger.Println("Cannot find users:", err.Error())
+			return
+		}
+
+		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerUsersAll() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerUsersAll()")
+
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
+
+		users, err := s.store.User().All(userID)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find users:", err.Error())
 			return
 		}
 

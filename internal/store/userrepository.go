@@ -31,6 +31,43 @@ func (r *UserRepository) Create(u *model.User) error {
 	return row.Scan(&u.ID)
 }
 
+func (r *UserRepository) All(currentUserID int) ([]*model.User, error) {
+	users := make([]*model.User, 0)
+
+	rows, err := r.s.db.Query(
+		context.Background(),
+		"SELECT * FROM users WHERE user_id != $1",
+		currentUserID,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	u := &model.User{}
+	for rows.Next() {
+		err = rows.Scan(
+			&u.ID,
+			&u.Login,
+			&u.EncryptedPassword,
+			&u.Name,
+			&u.Age,
+			&u.Gender,
+			&u.City,
+			&u.PhoneNumber,
+			&u.About,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		users = append(users, u)
+	}
+
+	return users, nil
+}
+
 func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender, city string) ([]*model.User, error) {
 	users := make([]*model.User, 0)
 
