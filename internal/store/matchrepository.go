@@ -38,8 +38,8 @@ func (r *MatchRepository) FindByUser(userID int) ([]*model.Match, error) {
 		return nil, err
 	}
 
-	m := &model.Match{}
 	for rows.Next() {
+		m := &model.Match{}
 		err := rows.Scan(
 			&m.ID,
 			&m.User1,

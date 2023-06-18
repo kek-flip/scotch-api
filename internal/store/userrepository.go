@@ -44,8 +44,8 @@ func (r *UserRepository) All(currentUserID int) ([]*model.User, error) {
 		return nil, err
 	}
 
-	u := &model.User{}
 	for rows.Next() {
+		u := &model.User{}
 		err = rows.Scan(
 			&u.ID,
 			&u.Login,
@@ -80,9 +80,9 @@ func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender
 	if err != nil {
 		return nil, err
 	}
-
-	u := &model.User{}
+	
 	for rows.Next() {
+		u := &model.User{}
 		err = rows.Scan(
 			&u.ID,
 			&u.Login,
@@ -130,9 +130,9 @@ func (r *UserRepository) find(field string, value interface{}) ([]*model.User, e
 	if err != nil {
 		return nil, err
 	}
-
-	u := &model.User{}
+	
 	for rows.Next() {
+		u := &model.User{}
 		err = rows.Scan(
 			&u.ID,
 			&u.Login,

@@ -56,8 +56,8 @@ func (r *LikeRepository) find(field string, value interface{}) ([]*model.Like, e
 		return nil, err
 	}
 
-	l := &model.Like{}
 	for rows.Next() {
+		l := &model.Like{}
 		err := rows.Scan(
 			&l.ID,
 			&l.UserID,
