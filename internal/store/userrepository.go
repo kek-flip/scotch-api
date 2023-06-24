@@ -68,13 +68,13 @@ func (r *UserRepository) All(currentUserID int) ([]*model.User, error) {
 	return users, nil
 }
 
-func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender, city string) ([]*model.User, error) {
+func (r *UserRepository) FindByFilters(currentUserID, minAge, maxAge int, gender, city string) ([]*model.User, error) {
 	users := make([]*model.User, 0)
 
 	rows, err := r.s.db.Query(
 		context.Background(),
-		"SELECT * FROM users WHERE age BETWEEN $1 AND $2 AND gender = $3 AND city = $4 AND user_id != $5",
-		minAge, MaxAge, gender, city, currentUserID,
+		"SELECT * FROM users WHERE user_id != $1",
+		currentUserID,
 	)
 
 	if err != nil {
@@ -97,6 +97,16 @@ func (r *UserRepository) FindByFilters(currentUserID, minAge, MaxAge int, gender
 
 		if err != nil {
 			return nil, err
+		}
+
+		if !(minAge < u.Age && u.Age < maxAge) {
+			continue
+		}
+		if u.City != city {
+			continue
+		}
+		if u.Gender != gender {
+			continue
 		}
 
 		users = append(users, u)
