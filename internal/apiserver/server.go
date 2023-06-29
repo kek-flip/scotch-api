@@ -543,7 +543,9 @@ func (s *server) handlerUsersByFilter() http.HandlerFunc {
 
 		f := &filter{}
 
-		if err := json.NewDecoder(r.Body).Decode(f); err != nil {
+		queryString := r.URL.Query().Get("")
+
+		if err := json.NewDecoder(strings.NewReader(queryString)).Decode(f); err != nil {
 			s.respond(w, http.StatusBadRequest, encd_err{err.Error()})
 			s.err_logger.Println("Invalid filter data format:", err.Error())
 			return
