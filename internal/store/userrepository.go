@@ -99,13 +99,13 @@ func (r *UserRepository) FindByFilters(currentUserID, minAge, maxAge int, gender
 			return nil, err
 		}
 
-		if !(minAge < u.Age && u.Age < maxAge) {
+		if minAge != 0 && maxAge != 0 && !(minAge <= u.Age && u.Age <= maxAge) {
 			continue
 		}
-		if u.City != city {
+		if city != "" && u.City != city {
 			continue
 		}
-		if u.Gender != gender {
+		if gender != "" && u.Gender != gender {
 			continue
 		}
 
