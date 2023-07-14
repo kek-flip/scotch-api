@@ -141,6 +141,7 @@ func (s *server) configRouter() {
 	userSubrouter.HandleFunc("/current", s.handlerUserUpdate()).Methods("PATCH", "PUT")
 	userSubrouter.HandleFunc("/current", s.handlerUserDelete()).Methods("DELETE")
 	userSubrouter.HandleFunc("/liked", s.handlerLikedUsers()).Methods("GET")
+	userSubrouter.HandleFunc("/liked_by", s.handlerLikedByUsers()).Methods("GET")
 	userSubrouter.HandleFunc("/matches", s.handlerUserMathces()).Methods("GET")
 	userSubrouter.HandleFunc("/count", s.handlerUserCount()).Methods("GET")
 	userSubrouter.HandleFunc("/filter", s.handlerUsersByFilter()).Methods("GET")
@@ -424,7 +425,7 @@ func (s *server) handlerLikedUsers() http.HandlerFunc {
 		likes, err := s.store.Like().FindByUserID(userID)
 		if err != nil {
 			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-			s.err_logger.Println("Cannot find like:", err.Error())
+			s.err_logger.Println("Cannot find likes:", err.Error())
 			return
 		}
 
@@ -433,7 +434,36 @@ func (s *server) handlerLikedUsers() http.HandlerFunc {
 			u, err := s.store.User().FindById(v.LikedUser)
 			if err != nil {
 				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
-				s.err_logger.Println("Cannot find user:", err.Error())
+				s.err_logger.Println("Cannot find users:", err.Error())
+				return
+			}
+
+			users = append(users, u)
+		}
+
+		s.respond(w, http.StatusOK, users)
+	}
+}
+
+func (s *server) handlerLikedByUsers() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.logger.Println("Processing by handlerLikedByUsers()")
+
+		userID := r.Context().Value(ctxUserKey).(*model.User).ID
+
+		likes, err := s.store.Like().FindByLikedUser(userID)
+		if err != nil {
+			s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+			s.err_logger.Println("Cannot find likes:", err.Error())
+			return
+		}
+
+		users := make([]*model.User, 0)
+		for _, v := range likes {
+			u, err := s.store.User().FindById(v.UserID)
+			if err != nil {
+				s.respond(w, http.StatusInternalServerError, encd_err{err.Error()})
+				s.err_logger.Println("Cannot find users:", err.Error())
 				return
 			}
 
